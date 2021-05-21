@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"math"
 	"os"
 	"os/signal"
@@ -18,10 +19,14 @@ import (
 )
 
 var (
-	brokerUrl                       = "tcp://192.168.1.28:1883"
-	serviceUUIDString               = "00001523-1212-efde-1523-785feabcd123"
-	txlevelCharacteristicUUIDString = "00001524-1212-efde-1523-785feabcd123"
-	rxlevelCharacteristicUUIDString = "00001525-1212-efde-1523-785feabcd123"
+	mqttBroker = flag.String("b", "tcp://iot.eclipse.org:1883", "MQTT broker endpoint")
+	mqttTopic  = flag.String("m", "airmeter/radon", "The MQTT topic root")
+
+	logLevel = flag.String("L", "info", "set the log level (debug, info, warn, error)")
+
+	serviceUUIDString               = flag.String("s", "00001523-1212-efde-1523-785feabcd123", "Service UUID")
+	txlevelCharacteristicUUIDString = flag.String("t", "00001524-1212-efde-1523-785feabcd123", "TX Level Characteristic UUID")
+	rxlevelCharacteristicUUIDString = flag.String("r", "00001525-1212-efde-1523-785feabcd123", "RX Level Characteristic UUID")
 )
 
 type Reporter interface {
@@ -48,7 +53,7 @@ func (r *MqttReporter) Report(value float32) error {
 		return err
 	}
 
-	token := r.mqttClient.Publish("airmeter/radon", 0, false, j)
+	token := r.mqttClient.Publish(*mqttTopic, 0, false, j)
 	if ok := token.Wait(); !ok {
 		log.Warn("token wait returned false")
 	}
@@ -65,6 +70,21 @@ type RadonEye struct {
 }
 
 func main() {
+	flag.Parse()
+
+	switch *logLevel {
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	case "warn":
+		log.SetLevel(log.WarnLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	default:
+		log.SetLevel(log.InfoLevel)
+	}
+
 	log.Info("starting new radon eye collector")
 
 	radonEye, err := NewRadonEye(bluetooth.DefaultAdapter)
@@ -93,7 +113,7 @@ func main() {
 		os.Exit(6)
 	}
 
-	mqttClient, err := newMQTTClient(brokerUrl)
+	mqttClient, err := newMQTTClient(*mqttBroker)
 	if err != nil {
 		log.Errorf("failed to setup MQTT client: %s", err)
 		os.Exit(7)
@@ -181,14 +201,14 @@ func NewRadonEye(adapter *bluetooth.Adapter) (*RadonEye, error) {
 		return nil, err
 	}
 
-	su, err := uuid.Parse(serviceUUIDString)
+	su, err := uuid.Parse(*serviceUUIDString)
 	if err != nil {
 		log.Errorf("couldn not parse service uuid: %s", err)
 		return nil, err
 	}
 	serviceUUID := bluetooth.NewUUID(su)
 
-	tlu, err := uuid.Parse(txlevelCharacteristicUUIDString)
+	tlu, err := uuid.Parse(*txlevelCharacteristicUUIDString)
 	if err != nil {
 		log.Errorf("couldn not parse level uuid: %s", err)
 		return nil, err
@@ -196,7 +216,7 @@ func NewRadonEye(adapter *bluetooth.Adapter) (*RadonEye, error) {
 
 	txLevelUUID := bluetooth.NewUUID(tlu)
 
-	rlu, err := uuid.Parse(rxlevelCharacteristicUUIDString)
+	rlu, err := uuid.Parse(*rxlevelCharacteristicUUIDString)
 	if err != nil {
 		log.Errorf("couldn not parse level uuid: %s", err)
 		return nil, err

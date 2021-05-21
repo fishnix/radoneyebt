@@ -1,6 +1,6 @@
-module github.com/fishnix/bluetooth
+module github.com/fishnix/radoneyebt
 
-go 1.15
+go 1.16
 
 require (
 	github.com/eclipse/paho.mqtt.golang v1.2.0
